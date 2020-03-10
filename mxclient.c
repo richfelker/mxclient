@@ -48,6 +48,8 @@ static int open_mx_socket(const char *domain, char *hostname)
 	int r = ns_initparse(abuf, alen, &msg);
 	if (r<0) return -EX_TEMPFAIL;
 	ns_rr rr;
+	if (ns_msg_getflag(msg, ns_f_rcode) == ns_r_nxdomain)
+		return -EX_NOHOST;
 	if (!ns_msg_count(msg, ns_s_an) && !ns_msg_getflag(msg, ns_f_rcode)) {
 		strcpy(hostname, domain);
 		int s = open_smtp_socket(hostname);
