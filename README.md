@@ -100,10 +100,17 @@ Basic usage is:
 
     mxclient -f you@your.example.com them@their.example.com < message
 
+where `message` *should* be in standard RFC 822/2822 email message
+form, but is not processed locally by mxclient. In particular, a line
+containing a lone `.` is not special; input ends only at EOF (like
+sendmail with the `-i` option). Either ordinary newlines or CR/LF line
+endings (or any mix) are accepted.
+
 mxclient accepts (and mostly ignores) a few common `sendmail` command
 line options, including `-F`, `-i`, and `-o*`. The only option it
-actually uses is `-f`, to set the envelope sender.
+actually uses is `-f`, to set the envelope sender (for the `MAIL
+FROM:` command).
 
 Exit code will be 75 for temporary/retryable errors, and another (from
-among `sysexits.h` codes) value for non-retryable errors, or zero for
-succes. During operation, progress is printed to `stdout`.
+among `sysexits.h` codes) nonzero value for non-retryable errors, or
+zero for success. During operation, progress is printed to `stdout`.
