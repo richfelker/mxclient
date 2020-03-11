@@ -92,6 +92,15 @@ int starttls_client(int, const char *, const unsigned char *, size_t, FILE *);
 #define d2printf(fd, ...) (printf(">>> " __VA_ARGS__), dprintf(fd, __VA_ARGS__))
 #define fgets_echo(buf, size, f) (fgets(buf, size, f) ? printf("<<< %s", buf), buf : 0)
 
+int getresponse(char *buf, int size, FILE *f)
+{
+	do {
+		if (!fgets(buf, size, f)) return -1;
+		printf("<<< %s", buf);
+	} while (!buf[0] || !buf[1] || !buf[2] || buf[3]=='-');
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
 	const char *from_addr = "";
@@ -143,7 +152,7 @@ int main(int argc, char **argv)
 	setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
 
 	FILE *f = fdopen(dup(s), "rb");
-	if (!fgets_echo(buf, sizeof buf, f)) goto rderr;
+	if (getresponse(buf, sizeof buf, f)) goto rderr;
 	if (buf[0]!='2') goto fail;
 
 restart:
@@ -157,7 +166,7 @@ restart:
 
 	if (tls && !tls_done) {
 		if (d2printf(s, "STARTTLS\r\n") < 0) goto wrerr;
-		if (!fgets_echo(buf, sizeof buf, f)) goto rderr;
+		if (getresponse(buf, sizeof buf, f)) goto rderr;
 		if (buf[0]!='2') goto fail;
 
 		int tls_s = starttls_client(s, mx_hostname, tlsa, tlsa_len, stdout);
@@ -172,15 +181,15 @@ restart:
 	}
 
 	if (d2printf(s, "MAIL FROM:<%s>\r\n", from_addr) < 0) goto wrerr;
-	if (!fgets_echo(buf, sizeof buf, f)) goto rderr;
+	if (getresponse(buf, sizeof buf, f)) goto rderr;
 	if (buf[0]!='2') goto fail;
 
 	if (d2printf(s, "RCPT TO:<%s>\r\n", to) < 0) goto wrerr;
-	if (!fgets_echo(buf, sizeof buf, f)) goto rderr;
+	if (getresponse(buf, sizeof buf, f)) goto rderr;
 	if (buf[0]!='2') goto fail;
 
 	if (d2printf(s, "DATA\r\n") < 0) goto wrerr;
-	if (!fgets_echo(buf, sizeof buf, f)) goto rderr;
+	if (getresponse(buf, sizeof buf, f)) goto rderr;
 	if (buf[0]!='3') goto fail;
 
 	FILE *f2 = fdopen(dup(s), "wb");
@@ -198,7 +207,7 @@ restart:
 	fprintf(f2, ".\r\n");
 	if (fclose(f2) < 0) goto wrerr;
 	
-	if (!fgets_echo(buf, sizeof buf, f)) goto rderr;
+	if (getresponse(buf, sizeof buf, f)) goto rderr;
 	if (buf[0]!='2') goto fail;
 
 	return 0;
