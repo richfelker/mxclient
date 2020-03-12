@@ -52,7 +52,7 @@ static void *tlsthread(void *vc)
 	unsigned char iobuf[BR_SSL_BUFSIZE_BIDI];
 	br_ssl_engine_set_buffer(&sc.eng, iobuf, sizeof iobuf, 1);
 
-	br_ssl_client_reset(&sc, ctx->hostname, 0);
+	br_ssl_client_reset(&sc, 0, 0);
 	struct vt_wrap vtw = { .vt = *xc.vtable };
 	vtw.old_end_chain = vtw.vt.end_chain;
 	vtw.vt.end_chain = dummy;
