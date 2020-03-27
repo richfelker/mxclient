@@ -9,6 +9,8 @@
 #include <semaphore.h>
 #include <stdio.h>
 
+int check_tlsa(const br_x509_pkey *, const unsigned char *, const unsigned char *, int, const unsigned char *, size_t);
+
 struct start_ctx {
 	int p, s;
 	const char *hostname;
@@ -19,6 +21,90 @@ struct start_ctx {
 	FILE *errf;
 };
 
+struct x509_dane_context {
+	const br_x509_class *vtable;
+	br_x509_minimal_context minimal;
+	const unsigned char *tlsa;
+	size_t tlsa_len;
+	int trusted;
+	int chain_idx;
+	br_x509_decoder_context dec;
+	br_sha256_context sha256;
+	br_sha512_context sha512;
+	const br_x509_pkey *ee_pkey;
+};
+
+static void start_chain(const br_x509_class **ctx, const char *server_name)
+{
+	struct x509_dane_context *c = (void *)ctx;
+	c->minimal.vtable->start_chain(&c->minimal.vtable, server_name);
+}
+
+static void start_cert(const br_x509_class **ctx, uint32_t length)
+{
+	struct x509_dane_context *c = (void *)ctx;
+	if (c->trusted) return;
+	c->minimal.vtable->start_cert(&c->minimal.vtable, length);
+	br_x509_decoder_init(&c->dec, 0, 0);
+	br_sha256_init(&c->sha256);
+	br_sha512_init(&c->sha512);
+}
+
+static void append(const br_x509_class **ctx, const unsigned char *buf, size_t len)
+{
+	struct x509_dane_context *c = (void *)ctx;
+	if (c->trusted) return;
+	c->minimal.vtable->append(&c->minimal.vtable, buf, len);
+	br_x509_decoder_push(&c->dec, buf, len);
+	br_sha256_update(&c->sha256, buf, len);
+	br_sha512_update(&c->sha512, buf, len);
+}
+
+static void end_cert(const br_x509_class **ctx)
+{
+	struct x509_dane_context *c = (void *)ctx;
+	if (c->trusted) return;
+	c->minimal.vtable->end_cert(&c->minimal.vtable);
+	const br_x509_pkey *pkey = br_x509_decoder_get_pkey(&c->dec);
+	unsigned char sha256[32], sha512[64];
+	br_sha256_out(&c->sha256, sha256);
+	br_sha512_out(&c->sha512, sha512);
+	if (!c->tlsa_len || check_tlsa(pkey, sha256, sha512, !c->chain_idx, c->tlsa, c->tlsa_len)==0) {
+		c->trusted = 1;
+		if (!c->chain_idx) c->ee_pkey = pkey;
+	}
+	c->chain_idx++;
+}
+
+static unsigned end_chain(const br_x509_class **ctx)
+{
+	struct x509_dane_context *c = (void *)ctx;
+	if (c->ee_pkey) return 0;
+	unsigned r = c->minimal.vtable->end_chain(&c->minimal.vtable);
+	if (r && r != BR_ERR_X509_NOT_TRUSTED) return r;
+	return c->trusted ? 0 : BR_ERR_X509_NOT_TRUSTED;
+}
+
+static const br_x509_pkey *get_pkey(const br_x509_class *const *ctx, unsigned *usages)
+{
+	struct x509_dane_context *c = (void *)ctx;
+	if (c->ee_pkey) {
+		if (usages) *usages = BR_KEYTYPE_KEYX | BR_KEYTYPE_SIGN; // ??
+		return c->ee_pkey;
+	}
+	return c->minimal.vtable->get_pkey(&c->minimal.vtable, usages);
+}
+
+static const br_x509_class x509_dane_vtable = {
+	.context_size = sizeof(struct x509_dane_context),
+	.start_chain = start_chain,
+	.start_cert = start_cert,
+	.append = append,
+	.end_cert = end_cert,
+	.end_chain = end_chain,
+	.get_pkey = get_pkey,
+};
+
 struct vt_wrap {
 	br_x509_class vt;
 	unsigned (*old_end_chain)(const br_x509_class **ctx);
@@ -26,39 +112,24 @@ struct vt_wrap {
 	size_t tlsa_len;
 };
 
-int check_tlsa(const br_x509_pkey *, const unsigned char *, size_t);
-
-static unsigned dummy(const br_x509_class **ctx)
-{
-	//br_x509_minimal_context *xc = (br_x509_minimal_context *)ctx;
-	struct vt_wrap *vtw = (struct vt_wrap *)(*ctx);
-	unsigned r = vtw->old_end_chain(ctx);
-	if (r && r != BR_ERR_X509_NOT_TRUSTED) return r;
-	const br_x509_pkey *pkey = (*ctx)->get_pkey(ctx, 0);
-	if (vtw->tlsa_len && check_tlsa(pkey, vtw->tlsa, vtw->tlsa_len)<0)
-		return BR_ERR_X509_NOT_TRUSTED;
-	return 0;
-}
-
 static void *tlsthread(void *vc)
 {
 	struct start_ctx *ctx = vc;
 	int s = ctx->s, p = ctx->p;
 
 	br_ssl_client_context sc;
-	br_x509_minimal_context xc;
-	br_ssl_client_init_full(&sc, &xc, 0, 0);
+	struct x509_dane_context xc = {
+		.vtable = &x509_dane_vtable,
+		.tlsa = ctx->tlsa,
+		.tlsa_len = ctx->tlsa_len,
+	};
+	br_ssl_client_init_full(&sc, &xc.minimal, 0, 0);
+	br_ssl_engine_set_x509(&sc.eng, &xc.vtable);
 
 	unsigned char iobuf[BR_SSL_BUFSIZE_BIDI];
 	br_ssl_engine_set_buffer(&sc.eng, iobuf, sizeof iobuf, 1);
 
 	br_ssl_client_reset(&sc, ctx->hostname, 0);
-	struct vt_wrap vtw = { .vt = *xc.vtable };
-	vtw.old_end_chain = vtw.vt.end_chain;
-	vtw.vt.end_chain = dummy;
-	vtw.tlsa = ctx->tlsa;
-	vtw.tlsa_len = ctx->tlsa_len;
-	xc.vtable = &vtw.vt;
 
 	struct timeval no_to = { 0 };
 	setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &no_to, sizeof no_to);
@@ -85,8 +156,6 @@ static void *tlsthread(void *vc)
 				started = 1;
 			}
 		}
-		if (st & BR_SSL_RECVREC)
-			sc.eng.server_name[0] = 0;
 		if (st == BR_SSL_CLOSED) {
 			//int err = br_ssl_engine_last_error(&sc.eng);
 			break;

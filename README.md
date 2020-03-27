@@ -40,10 +40,8 @@ actual TLS endpoint local.
 ## Project Status
 
 mxclient is incomplete but under active development. Proxy support is
-missing, and DANE-EE with key-only (rather than full certificate)
-pinning is the only DANE mode supported (others enforce use of
-STARTTLS but do not check key/certificate). Otherwise all basic
-functionality is present.
+missing, and DANE modes other than DANE-EE with public key only (vs
+full cert) are untested. Otherwise all basic functionality is present.
 
 
 ## Background on SMTP and TLS

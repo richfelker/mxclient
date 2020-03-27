@@ -192,7 +192,7 @@ static int check_key(const br_x509_pkey *pkey, int match_type, const unsigned ch
 	return -1;
 }
 
-int check_tlsa(const br_x509_pkey *pkey, const unsigned char *tlsa, size_t tlsa_len)
+int check_tlsa(const br_x509_pkey *pkey, const unsigned char *sha256, const unsigned char *sha512, int is_ee, const unsigned char *tlsa, size_t tlsa_len)
 {
 	ns_msg msg;
 	if (ns_initparse(tlsa, tlsa_len, &msg) < 0)
@@ -202,10 +202,32 @@ int check_tlsa(const br_x509_pkey *pkey, const unsigned char *tlsa, size_t tlsa_
 		if (ns_rr_type(rr) != 52) continue;
 		if (ns_rr_rdlen(rr) < 4) return -1;
 		const unsigned char *pinning = ns_rr_rdata(rr);
-		if (pinning[0] != 3 || pinning[1] != 1)
-			return 0; // accept anything for unsupported DANE modes
-		if (!check_key(pkey, pinning[2], pinning+3, ns_rr_rdlen(rr)-3))
-			return 0;
+		if (!is_ee && (pinning[0] == 3 || pinning[0] == 1))
+			continue; // DANE-EE pinnings can't be used for non-EE certs
+		if (is_ee && (pinning[0] != 3 && pinning[0] != 1))
+			continue; // Only DANE-EE pinnings can be used for EE certs
+		if (pinning[1] == 0) {
+			if (pinning[2]==0) {
+				unsigned char sha256_buf[32];
+				br_sha256_context hasher;
+				br_sha256_init(&hasher);
+				br_sha256_update(&hasher, pinning+3, ns_rr_rdlen(rr)-3);
+				br_sha256_out(&hasher, sha256_buf);
+				if (!memcmp(sha256_buf, sha256, 32))
+					return 0;
+			} else if (pinning[2]==1) {
+				if (ns_rr_rdlen(rr)-3 != 32) continue;
+				if (!memcmp(pinning+3, sha256, 32))
+					return 0;
+			} else if (pinning[2]==2) {
+				if (ns_rr_rdlen(rr)-3 != 64) continue;
+				if (!memcmp(pinning+3, sha512, 64))
+					return 0;
+			}
+		} else if (pinning[1] == 1) {
+			if (!check_key(pkey, pinning[2], pinning+3, ns_rr_rdlen(rr)-3))
+				return 0;
+		}
 	}
 	return -1;
 }
