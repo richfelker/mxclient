@@ -9,7 +9,8 @@
 #include <semaphore.h>
 #include <stdio.h>
 
-int check_tlsa(const br_x509_pkey *, const unsigned char *, const unsigned char *, int, const unsigned char *, size_t);
+void pkey_hash(unsigned char *, unsigned char *, const br_x509_pkey *);
+int check_tlsa(const unsigned char *, const unsigned char *, const unsigned char *, const unsigned char *, int, const unsigned char *, size_t);
 
 struct start_ctx {
 	int p, s;
@@ -65,11 +66,16 @@ static void end_cert(const br_x509_class **ctx)
 	struct x509_dane_context *c = (void *)ctx;
 	if (c->trusted) return;
 	c->minimal.vtable->end_cert(&c->minimal.vtable);
+
 	const br_x509_pkey *pkey = br_x509_decoder_get_pkey(&c->dec);
-	unsigned char sha256[32], sha512[64];
-	br_sha256_out(&c->sha256, sha256);
-	br_sha512_out(&c->sha512, sha512);
-	if (!c->tlsa_len || check_tlsa(pkey, sha256, sha512, !c->chain_idx, c->tlsa, c->tlsa_len)==0) {
+	unsigned char pkey_sha256[32], pkey_sha512[64];
+	pkey_hash(pkey_sha256, pkey_sha512, pkey);
+
+	unsigned char cert_sha256[32], cert_sha512[64];
+	br_sha256_out(&c->sha256, cert_sha256);
+	br_sha512_out(&c->sha512, cert_sha512);
+
+	if (!c->tlsa_len || check_tlsa(pkey_sha256, pkey_sha512, cert_sha256, cert_sha512, !c->chain_idx, c->tlsa, c->tlsa_len)==0) {
 		c->trusted = 1;
 		if (!c->chain_idx) c->ee_pkey = pkey;
 	}
