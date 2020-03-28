@@ -8,6 +8,7 @@
 #include <poll.h>
 #include <semaphore.h>
 #include <stdio.h>
+#include <arpa/nameser.h>
 
 void pkey_hash(unsigned char *, unsigned char *, const br_x509_pkey *);
 int check_tlsa(const unsigned char *, const unsigned char *, const unsigned char *, const unsigned char *, int, const unsigned char *, size_t);
@@ -33,6 +34,7 @@ struct x509_dane_context {
 	br_sha256_context sha256;
 	br_sha512_context sha512;
 	const br_x509_pkey *ee_pkey;
+	FILE *errf;
 };
 
 static void start_chain(const br_x509_class **ctx, const char *server_name)
@@ -61,6 +63,21 @@ static void append(const br_x509_class **ctx, const unsigned char *buf, size_t l
 	br_sha512_update(&c->sha512, buf, len);
 }
 
+static void print_tlsa(FILE *f, const unsigned char *tlsa, size_t tlsa_len, int idx)
+{
+	ns_msg msg;
+	if (ns_initparse(tlsa, tlsa_len, &msg) < 0) return;
+	ns_rr rr;
+	if (!ns_parserr(&msg, ns_s_an, idx, &rr)) {
+		const unsigned char *data = ns_rr_rdata(rr);
+		size_t len = ns_rr_rdlen(rr);
+		fprintf(f, "%d %d %d ", data[0], data[1], data[2]);
+		for (int i=3; i<len; i++)
+			fprintf(f, "%.2X", data[i]);
+		fprintf(f, "\n");
+	}
+}
+
 static void end_cert(const br_x509_class **ctx)
 {
 	struct x509_dane_context *c = (void *)ctx;
@@ -75,9 +92,23 @@ static void end_cert(const br_x509_class **ctx)
 	br_sha256_out(&c->sha256, cert_sha256);
 	br_sha512_out(&c->sha512, cert_sha512);
 
-	if (!c->tlsa_len || check_tlsa(pkey_sha256, pkey_sha512, cert_sha256, cert_sha512, !c->chain_idx, c->tlsa, c->tlsa_len)==0) {
+	int r = check_tlsa(pkey_sha256, pkey_sha512, cert_sha256, cert_sha512, !c->chain_idx, c->tlsa, c->tlsa_len);
+	if (r>=0) {
 		c->trusted = 1;
 		if (!c->chain_idx) c->ee_pkey = pkey;
+		if (c->errf) {
+			if (!c->tlsa_len) {
+				fprintf(c->errf, "No trust anchor; accepted key ");
+				for (int i=0; i<32; i++) fprintf(c->errf, "%.2X", pkey_sha256[i]);
+				fprintf(c->errf, "\n");
+			} else {
+				if (c->chain_idx)
+					fprintf(c->errf, "Accepted trust anchor certificate at position %d matching DANE record:\n", c->chain_idx);
+				else
+					fprintf(c->errf, "Accepted end entity certificate matching DANE record:\n");
+				print_tlsa(c->errf, c->tlsa, c->tlsa_len, r);
+			}
+		}
 	}
 	c->chain_idx++;
 }
@@ -128,6 +159,7 @@ static void *tlsthread(void *vc)
 		.vtable = &x509_dane_vtable,
 		.tlsa = ctx->tlsa,
 		.tlsa_len = ctx->tlsa_len,
+		.errf = ctx->errf,
 	};
 	br_ssl_client_init_full(&sc, &xc.minimal, 0, 0);
 	br_ssl_engine_set_x509(&sc.eng, &xc.vtable);

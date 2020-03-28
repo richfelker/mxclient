@@ -6,6 +6,8 @@ int check_tlsa(const unsigned char *pkey_sha256, const unsigned char *pkey_sha51
 	const unsigned char *cert_sha256, const unsigned char *cert_sha512,
 	int is_ee, const unsigned char *tlsa, size_t tlsa_len)
 {
+	if (!tlsa_len) return 0;
+
 	ns_msg msg;
 	if (ns_initparse(tlsa, tlsa_len, &msg) < 0)
 		return -1;
@@ -47,11 +49,11 @@ int check_tlsa(const unsigned char *pkey_sha256, const unsigned char *pkey_sha51
 		if (match_type==1) {
 			if (cad_len != 32) continue;
 			if (!memcmp(cad, match_sha256, 32))
-				return 0;
+				return i;
 		} else if (match_type==2) {
 			if (cad_len != 64) continue;
 			if (!memcmp(cad, match_sha512, 64))
-				return 0;
+				return i;
 		}
 	}
 	return -1;

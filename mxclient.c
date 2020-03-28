@@ -145,7 +145,12 @@ int main(int argc, char **argv)
 	if (tlsa_len < 0) return -tlsa_len;
 
 	/* force tls if there is a tlsa record */
-	if (tlsa_len) tls = 1;
+	if (tlsa_len) {
+		printf("%s has DANE records, forcing STARTTLS\n", mx_hostname);
+		tls = 1;
+	} else {
+		printf("%s has no DANE records, STARTTLS opportunistic\n", mx_hostname);
+	}
 
 	struct timeval timeout = { .tv_sec = 30 };
 	setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof timeout);
