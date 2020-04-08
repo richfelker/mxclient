@@ -5,7 +5,7 @@ bindir = $(exec_prefix)/bin
 
 CFLAGS = -O2 -Wall
 LDFLAGS =
-LIBS = -lbearssl
+LIBS = -lbearssl -lpthread -lresolv
 INSTALL = install
 
 -include config.mak
