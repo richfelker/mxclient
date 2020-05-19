@@ -69,7 +69,11 @@ static int get_tlsa(unsigned char *tlsa, size_t maxsize, const char *hostname)
 {
 	char buf[HOST_NAME_MAX+20];
 	snprintf(buf, sizeof buf, "_25._tcp.%s", hostname);
-	int alen = res_query(buf, 1, 52 /* TLSA */, tlsa, maxsize);
+	unsigned char query[HOST_NAME_MAX+50];
+	int qlen = res_mkquery(0, buf, 1, 52 /* TLSA */, 0, 0, 0, query, sizeof query);
+	if (qlen < 0) return -EX_DATAERR;
+	query[3] |= 32; /* AD flag */
+	int alen = res_send(query, qlen, tlsa, maxsize);
 	if (alen < 0) return -EX_TEMPFAIL;
 
 	ns_msg msg;
