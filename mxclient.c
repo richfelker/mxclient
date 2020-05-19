@@ -80,6 +80,8 @@ static int get_tlsa(unsigned char *tlsa, size_t maxsize, const char *hostname)
 		return 0;
 	if (ns_msg_getflag(msg, ns_f_rcode) != ns_r_noerror)
 		return -EX_TEMPFAIL;
+	if (!ns_msg_getflag(msg, ns_f_ad))
+		return 0;
 	for (int i=0; !ns_parserr(&msg, ns_s_an, i, &rr); i++) {
 		if (ns_rr_type(rr) != 52) continue;
 		return alen;

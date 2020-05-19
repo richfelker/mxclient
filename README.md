@@ -66,13 +66,7 @@ mxclient uses the SMTP STARTTLS extension whenever it is advertised by
 the server or DANE is in use for the domain, and enforces DANE-EE
 unless it can determine non-existence of TLSA (DANE) records for the
 recipient domain's MX. It relies on a local DNSSEC-validating
-nameserver to obtain this information. Operation with a
-non-DNSSEC-validating nameserver will produce a configuration that
-does not conform to the standards and that honors DANE regardless of
-the ability to authenticate the records obtained from DNS. This is
-still potentially safer than not using DANE at all, and no worse, but
-users *should* ensure that they have a working, trusted nameserver
-validating DNSSEC, ideally on localhost.
+nameserver, ideally on localhost, to obtain this information.
 
 
 ## Building
