@@ -82,8 +82,23 @@ static int get_tlsa(unsigned char *tlsa, size_t maxsize, const char *hostname)
 	ns_rr rr;
 	if (ns_msg_getflag(msg, ns_f_rcode) == ns_r_nxdomain)
 		return 0;
-	if (ns_msg_getflag(msg, ns_f_rcode) != ns_r_noerror)
+	if (ns_msg_getflag(msg, ns_f_rcode) != ns_r_noerror) {
+		/* in case error is caused by broken auth ns for the domain
+		 * failing to understand TLSA query, check a safe RR type,
+		 * CNAME, to determine if zone is insecure (unsigned) and
+		 * conclude no valid TLSA records */
+		qlen = res_mkquery(0, hostname, 1, 5 /* CNAME */,
+			0, 0, 0, query, sizeof query);
+		query[3] |= 32; /* AD flag */
+		alen = res_send(query, qlen, tlsa, maxsize);
+		if (alen < 0) return -EX_TEMPFAIL;
+		int r = ns_initparse(tlsa, alen, &msg);
+		if (r<0 || ns_msg_getflag(msg, ns_f_rcode) != ns_r_noerror)
+			return -EX_TEMPFAIL;
+		if (!ns_msg_getflag(msg, ns_f_ad))
+			return 0;
 		return -EX_TEMPFAIL;
+	}
 	if (!ns_msg_getflag(msg, ns_f_ad))
 		return 0;
 	for (int i=0; !ns_parserr(&msg, ns_s_an, i, &rr); i++) {
