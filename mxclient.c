@@ -78,7 +78,7 @@ static int get_tlsa(unsigned char *tlsa, size_t maxsize, const char *hostname)
 
 	ns_msg msg;
 	int r = ns_initparse(tlsa, alen, &msg);
-	if (r<0) return 0;
+	if (r<0) return -EX_TEMPFAIL;
 	ns_rr rr;
 	if (ns_msg_getflag(msg, ns_f_rcode) == ns_r_nxdomain)
 		return 0;
