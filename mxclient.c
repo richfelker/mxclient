@@ -74,11 +74,11 @@ static int get_tlsa(unsigned char *tlsa, size_t maxsize, const char *hostname)
 	if (qlen < 0) return -EX_DATAERR;
 	query[3] |= 32; /* AD flag */
 	int alen = res_send(query, qlen, tlsa, maxsize);
-	if (alen < 0) return -EX_TEMPFAIL;
+	if (alen < 0) goto tempfail;
 
 	ns_msg msg;
 	int r = ns_initparse(tlsa, alen, &msg);
-	if (r<0) return -EX_TEMPFAIL;
+	if (r<0) goto tempfail;
 	ns_rr rr;
 	if (ns_msg_getflag(msg, ns_f_rcode) == ns_r_nxdomain)
 		return 0;
@@ -87,6 +87,7 @@ static int get_tlsa(unsigned char *tlsa, size_t maxsize, const char *hostname)
 		 * failing to understand TLSA query, check a safe RR type,
 		 * CNAME, to determine if zone is insecure (unsigned) and
 		 * conclude no valid TLSA records */
+tempfail:
 		qlen = res_mkquery(0, hostname, 1, 5 /* CNAME */,
 			0, 0, 0, query, sizeof query);
 		query[3] |= 32; /* AD flag */
