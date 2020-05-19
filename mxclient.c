@@ -88,7 +88,7 @@ static int get_tlsa(unsigned char *tlsa, size_t maxsize, const char *hostname)
 		 * CNAME, to determine if zone is insecure (unsigned) and
 		 * conclude no valid TLSA records */
 tempfail:
-		qlen = res_mkquery(0, hostname, 1, 5 /* CNAME */,
+		qlen = res_mkquery(0, hostname, 1, 255 /* ANY */,
 			0, 0, 0, query, sizeof query);
 		query[3] |= 32; /* AD flag */
 		alen = res_send(query, qlen, tlsa, maxsize);
