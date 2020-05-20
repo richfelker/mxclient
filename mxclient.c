@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdarg.h>
 #include <sysexits.h>
 #include <sys/time.h>
@@ -36,6 +37,15 @@ static int open_smtp_socket(const char *hostname)
 	return -EX_TEMPFAIL;
 }
 
+int intcmp(const void *pa, const void *pb)
+{
+	int a = *(const int *)pa;
+	int b = *(const int *)pb;
+	if (a<b) return -1;
+	if (a>b) return 1;
+	return 0;
+}
+
 static int open_mx_socket(const char *domain, char *hostname)
 {
 	if (strlen(domain) >= HOST_NAME_MAX) return -1;
@@ -55,8 +65,15 @@ static int open_mx_socket(const char *domain, char *hostname)
 		int s = open_smtp_socket(hostname);
 		return s;
 	}
+	int mxsort[sizeof abuf / 12][2], cnt=0;
 	for (int i=0; !ns_parserr(&msg, ns_s_an, i, &rr); i++) {
 		if (ns_rr_type(rr) != T_MX) continue;
+		mxsort[cnt][0] = ns_rr_rdata(rr)[0]*256 + ns_rr_rdata(rr)[1];
+		mxsort[cnt++][1] = i;
+	}
+	qsort(mxsort, cnt, sizeof *mxsort, intcmp);
+	for (int i=0; i<cnt; i++) {
+		ns_parserr(&msg, ns_s_an, mxsort[i][1], &rr);
 		r = ns_name_uncompress(abuf, abuf+alen, ns_rr_rdata(rr)+2, hostname, HOST_NAME_MAX+1);
 		if (r<0) return -EX_TEMPFAIL;
 		int s = open_smtp_socket(hostname);
