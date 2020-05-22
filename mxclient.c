@@ -118,7 +118,7 @@ static int is_insecure(const char *hostname)
 	return 1;
 }
 
-static int get_tlsa(unsigned char *tlsa, size_t maxsize, const char *hostname)
+static int get_tlsa(unsigned char *tlsa, size_t maxsize, const char *hostname, FILE *f)
 {
 	char buf[HOST_NAME_MAX+20];
 	snprintf(buf, sizeof buf, "_25._tcp.%s", hostname);
@@ -141,7 +141,9 @@ static int get_tlsa(unsigned char *tlsa, size_t maxsize, const char *hostname)
 		 * if zone is insecure (unsigned) and conclude no valid
 		 * TLSA records */
 tempfail:
+		if (f) fprintf(f, "%s TLSA lookup failed, checking DNSSEC status\n", hostname);
 		if (is_insecure(hostname)) return 0;
+		if (f) fprintf(f, "%s cannot be determined insecure; delivery not possible\n", hostname);
 		return -EX_TEMPFAIL;
 	}
 	if (!ns_msg_getflag(msg, ns_f_ad))
@@ -205,7 +207,7 @@ int main(int argc, char **argv)
 	int s = open_mx_socket(domain, mx_hostname);
 	if (s < 0) return -s;
 
-	int tlsa_len = get_tlsa(tlsa, sizeof tlsa, mx_hostname);
+	int tlsa_len = get_tlsa(tlsa, sizeof tlsa, mx_hostname, stdout);
 
 	/* failure to obtain DANE records or negative result must be fatal */
 	if (tlsa_len < 0) return -tlsa_len;
