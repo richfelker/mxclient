@@ -82,6 +82,42 @@ static int open_mx_socket(const char *domain, char *hostname)
 	return -EX_TEMPFAIL;
 }
 
+static int is_insecure(const char *hostname)
+{
+	unsigned char query[HOST_NAME_MAX+50];
+	unsigned char answer[512];
+	int qlen, alen, r;
+	ns_msg msg;
+	ns_rr rr;
+	int rrtype[2] = { 1 /* A */, 5 /* CNAME */ };
+
+	for (int i=0; i<2; i++) {
+		qlen = res_mkquery(0, hostname, 1, rrtype[i],
+			0, 0, 0, query, sizeof query);
+		if (qlen < 0) return 0;
+		query[3] |= 32; /* AD flag */
+
+		alen = res_send(query, qlen, answer, sizeof answer);
+		if (alen < 0) return 0;
+
+		r = ns_initparse(answer, alen, &msg);
+		if (r < 0) return 0;
+
+		r = ns_msg_getflag(msg, ns_f_rcode);
+		if (r != ns_r_nxdomain && r != ns_r_noerror) return 0;
+
+		if (ns_msg_getflag(msg, ns_f_ad)) return 0;
+
+		if (rrtype[i] == 5) break;
+
+		int is_cname = 0;
+		for (int j=0; !ns_parserr(&msg, ns_s_an, j, &rr); j++)
+			if (ns_rr_type(rr) == 5) is_cname = 1;
+		if (!is_cname) break;
+	}
+	return 1;
+}
+
 static int get_tlsa(unsigned char *tlsa, size_t maxsize, const char *hostname)
 {
 	char buf[HOST_NAME_MAX+20];
@@ -101,20 +137,11 @@ static int get_tlsa(unsigned char *tlsa, size_t maxsize, const char *hostname)
 		return 0;
 	if (ns_msg_getflag(msg, ns_f_rcode) != ns_r_noerror) {
 		/* in case error is caused by broken auth ns for the domain
-		 * failing to understand TLSA query, check a safe RR type,
-		 * CNAME, to determine if zone is insecure (unsigned) and
-		 * conclude no valid TLSA records */
+		 * failing to understand TLSA query, check to determine
+		 * if zone is insecure (unsigned) and conclude no valid
+		 * TLSA records */
 tempfail:
-		qlen = res_mkquery(0, hostname, 1, 255 /* ANY */,
-			0, 0, 0, query, sizeof query);
-		query[3] |= 32; /* AD flag */
-		alen = res_send(query, qlen, tlsa, maxsize);
-		if (alen < 0) return -EX_TEMPFAIL;
-		int r = ns_initparse(tlsa, alen, &msg);
-		if (r<0 || ns_msg_getflag(msg, ns_f_rcode) != ns_r_noerror)
-			return -EX_TEMPFAIL;
-		if (!ns_msg_getflag(msg, ns_f_ad))
-			return 0;
+		if (is_insecure(hostname)) return 0;
 		return -EX_TEMPFAIL;
 	}
 	if (!ns_msg_getflag(msg, ns_f_ad))
