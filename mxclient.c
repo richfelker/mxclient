@@ -50,8 +50,11 @@ static int open_mx_socket(const char *domain, char *hostname)
 {
 	if (strlen(domain) >= HOST_NAME_MAX) return -1;
 
+	unsigned char qbuf[HOST_NAME_MAX+50];
 	unsigned char abuf[512];
-	int alen = res_query(domain, 1, T_MX, abuf, sizeof abuf);
+	int qlen = res_mkquery(0, domain, 1, T_MX, 0, 0, 0, qbuf, sizeof qbuf);
+	if (qlen < 0) return -EX_TEMPFAIL;
+	int alen = res_send(qbuf, qlen, abuf, sizeof abuf);
 	if (alen < 0) return -EX_TEMPFAIL;
 
 	ns_msg msg;
