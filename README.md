@@ -1,7 +1,7 @@
 # mxclient
 
 mxclient is not a normal MTA. Rather, it's a minimalist client for
-sending mail *direct to the recipient's MX*, or mail exchanger, in
+sending mail *directly to the recipient's MX*, or mail exchanger, in
 contrast to the widespread practice of sending through a "smarthost"
 or "outgoing mail server".
 
@@ -23,7 +23,7 @@ mxclient is not an outgoing mail queue. It delivers mail
 synchronously, to a single recipient, reporting success, temporary
 failure, or permanent failure via the exit status (using `sysexits.h`
 codes). It can be used as the backend for the separate queuing
-frontend to yield a full "sendmail" command for use by MUAs or scripts
+frontend to yield a full "Sendmail" command for use by MUAs or scripts
 that expect asynchronous delivery.
 
 Ability to send mail directly to the recipient's MX depends on having
@@ -41,7 +41,7 @@ actual TLS endpoint local.
 
 mxclient is incomplete but under active development. Proxy support is
 missing, and DANE modes other than DANE-EE with public key only (vs
-full cert) are untested. Otherwise all basic functionality is present.
+full cert) are untested. Otherwise, all basic functionality is present.
 
 
 ## Background on SMTP and TLS
@@ -63,10 +63,10 @@ domain's mail exchangers, and A/AAAA/CNAME records used to find the IP
 address of the server to send to).
 
 mxclient uses the SMTP STARTTLS extension whenever it is advertised by
-the server or DANE is in use for the domain, and enforces DANE-EE
-unless it can determine non-existence of TLSA (DANE) records for the
+the server or DANE is in use for the domain and enforces DANE-EE
+unless it can determine the non-existence of TLSA (DANE) records for the
 recipient domain's MX. It relies on a local DNSSEC-validating
-nameserver, ideally on localhost, to obtain this information.
+nameserver, ideally on the localhost, to obtain this information.
 
 
 ## Building
@@ -76,11 +76,11 @@ The only dependencies for mxclient are
 `arpa/nameser.h` and `res_query` interfaces. Drop-in replacements for
 these can be used on systems that don't have them.
 
-A `config.mak` file can be created to override default compile/link
+A `config.mak` file can be created to override default-compile/link
 flags or install paths. Future versions will ship a `configure` script
 that can generate a `config.mak` for you.
 
-After checking and adusting config as needed, simply run `make`.
+After checking and adjusting config as needed, simply run `make`.
 mxclient can be installed with `make install`, but installation is not
 needed to use it. The program is entirely self-contained and
 stand-alone.
