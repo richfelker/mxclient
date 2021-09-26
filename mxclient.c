@@ -63,16 +63,18 @@ static int open_mx_socket(const char *domain, char *hostname)
 	ns_rr rr;
 	if (ns_msg_getflag(msg, ns_f_rcode) == ns_r_nxdomain)
 		return -EX_NOHOST;
-	if (!ns_msg_count(msg, ns_s_an) && !ns_msg_getflag(msg, ns_f_rcode)) {
-		strcpy(hostname, domain);
-		int s = open_smtp_socket(hostname);
-		return s;
-	}
+	if (ns_msg_getflag(msg, ns_f_rcode))
+		return -EX_TEMPFAIL;
 	int mxsort[sizeof abuf / 12][2], cnt=0;
 	for (int i=0; !ns_parserr(&msg, ns_s_an, i, &rr); i++) {
 		if (ns_rr_type(rr) != T_MX) continue;
 		mxsort[cnt][0] = ns_rr_rdata(rr)[0]*256 + ns_rr_rdata(rr)[1];
 		mxsort[cnt++][1] = i;
+	}
+	if (!cnt) {
+		strcpy(hostname, domain);
+		int s = open_smtp_socket(hostname);
+		return s;
 	}
 	qsort(mxsort, cnt, sizeof *mxsort, intcmp);
 	for (int i=0; i<cnt; i++) {
