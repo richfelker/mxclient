@@ -56,6 +56,7 @@ static int open_mx_socket(const char *domain, char *hostname)
 	if (qlen < 0) return -EX_TEMPFAIL;
 	int alen = res_send(qbuf, qlen, abuf, sizeof abuf);
 	if (alen < 0) return -EX_TEMPFAIL;
+	if (alen > sizeof abuf) alen = sizeof abuf;
 
 	ns_msg msg;
 	int r = ns_initparse(abuf, alen, &msg);
@@ -104,6 +105,7 @@ static int is_insecure(const char *hostname)
 
 		alen = res_send(query, qlen, answer, sizeof answer);
 		if (alen < 0) return 0;
+		if (alen > sizeof answer) alen = sizeof answer;
 
 		r = ns_initparse(answer, alen, &msg);
 		if (r < 0) return 0;
@@ -133,6 +135,7 @@ static int get_tlsa(unsigned char *tlsa, size_t maxsize, const char *hostname, F
 	query[3] |= 32; /* AD flag */
 	int alen = res_send(query, qlen, tlsa, maxsize);
 	if (alen < 0) goto tempfail;
+	if (alen > maxsize) alen = maxsize;
 
 	ns_msg msg;
 	int r = ns_initparse(tlsa, alen, &msg);
