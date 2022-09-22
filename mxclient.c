@@ -228,7 +228,7 @@ int main(int argc, char **argv)
 		printf("%s has no DANE records, STARTTLS opportunistic\n", mx_hostname);
 	}
 
-	struct timeval timeout = { .tv_sec = 30 };
+	struct timeval timeout = { .tv_sec = 60 };
 	setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof timeout);
 	setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
 
