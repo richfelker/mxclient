@@ -51,7 +51,7 @@ static int open_mx_socket(const char *domain, char *hostname)
 	if (strlen(domain) >= HOST_NAME_MAX) return -1;
 
 	unsigned char qbuf[HOST_NAME_MAX+50];
-	unsigned char abuf[512];
+	unsigned char abuf[1024];
 	int qlen = res_mkquery(0, domain, 1, T_MX, 0, 0, 0, qbuf, sizeof qbuf);
 	if (qlen < 0) return -EX_TEMPFAIL;
 	int alen = res_send(qbuf, qlen, abuf, sizeof abuf);
@@ -91,7 +91,7 @@ static int open_mx_socket(const char *domain, char *hostname)
 static int is_insecure(const char *hostname)
 {
 	unsigned char query[HOST_NAME_MAX+50];
-	unsigned char answer[512];
+	unsigned char answer[1024];
 	int qlen, alen, r;
 	ns_msg msg;
 	ns_rr rr;
@@ -204,7 +204,7 @@ int main(int argc, char **argv)
 	int tls = 0, tls_done = 0;
 	char mx_hostname[HOST_NAME_MAX+1];
 	char helo_host[HOST_NAME_MAX+1];
-	unsigned char tlsa[4096];
+	unsigned char tlsa[65536];
 
 	gethostname(helo_host, sizeof helo_host);
 	const char *domain = strchr(to, '@');
