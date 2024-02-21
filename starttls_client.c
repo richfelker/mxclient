@@ -241,6 +241,10 @@ static void *tlsthread(void *vc)
 			continue;
 		}
 	}
+	if (!started) {
+		ctx->err = 1;
+		sem_post(&ctx->sem);
+	}
 	close(s);
 	close(p);
 	return 0;
