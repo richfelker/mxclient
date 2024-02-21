@@ -274,7 +274,18 @@ int starttls_client(int s, const char *hostname, const unsigned char *tlsa, size
 		ctx.errf = errf;
 		pthread_t td;
 		if (!pthread_create(&td, 0, tlsthread, &ctx)) {
-			sem_wait(&ctx.sem);
+			struct timespec ts;
+			clock_gettime(CLOCK_REALTIME, &ts);
+			ts.tv_sec += sto.tv_sec;
+			if ((ts.tv_nsec += sto.tv_usec * 1000) > 1000000000) {
+				ts.tv_sec++;
+				ts.tv_nsec -= 1000000000;
+			}
+			if (sem_timedwait(&ctx.sem, &ts)) {
+				shutdown(s, SHUT_RDWR);
+				pthread_join(td, 0);
+				return -1;
+			}
 			if (!ctx.err) {
 				pthread_detach(td);
 				return sp[0];
